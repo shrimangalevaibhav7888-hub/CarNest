@@ -1,4 +1,4 @@
-import { API_URL } from "@/lib/constants";
+import { API_URL } from "../lib/constants";
 
 export interface RequestOptions extends RequestInit {
   token?: string | null;
