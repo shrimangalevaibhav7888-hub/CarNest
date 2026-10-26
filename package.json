@@ -1,0 +1,13 @@
+{
+  "name": "carenest-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CareNest AI — Full-Stack Elderly Patient Home-Care Support Platform",
+  "scripts": {
+    "dev": "npm --prefix apps/frontend run dev",
+    "dev:frontend": "npm --prefix apps/frontend run dev",
+    "dev:backend": "npm --prefix apps/backend run dev",
+    "build": "npm --prefix apps/frontend run build",
+    "test:backend": "npm --prefix apps/backend run test"
+  }
+}

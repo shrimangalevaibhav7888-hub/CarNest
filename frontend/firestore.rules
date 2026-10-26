@@ -1,0 +1,139 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (getUserRole() == 'ADMIN' || request.auth.token.admin == true);
+    }
+    
+    function isLinkedFamily(elderlyId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/elderlyProfiles/$(elderlyId)).data.linkedFamilyIds
+      );
+    }
+    
+    function isAssignedCaregiver(elderlyId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/elderlyProfiles/$(elderlyId)).data.assignedCaregiverIds
+      );
+    }
+
+    // 1. User Profiles Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // 2. Elderly Medical Profiles (Protected - NOT publicly readable)
+    match /elderlyProfiles/{elderlyId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.userId) || 
+        isLinkedFamily(elderlyId) || 
+        isAssignedCaregiver(elderlyId) || 
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.userId) || 
+        isLinkedFamily(elderlyId) || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 3. Caregiver Profiles & Documents (Only Admin can verify status)
+    match /caregivers/{caregiverId} {
+      // Public verified caregivers list is readable
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        (isOwner(resource.data.userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationStatus'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /caregiverDocuments/{docId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.caregiverId) || isAdmin());
+      allow write: if isAuthenticated() && (isOwner(request.resource.data.caregiverId) || isAdmin());
+    }
+
+    // 4. Bookings Collection
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.familyId ||
+        request.auth.uid == resource.data.caregiverId ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.familyId ||
+        request.auth.uid == resource.data.caregiverId ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 5. Medicines & Daily Logs
+    match /medicines/{medicineId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /medicineLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /dailyCare/{careId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 6. Emergency Alerts
+    match /emergencyAlerts/{alertId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // 7. Care Updates & Timeline
+    match /careUpdates/{updateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 8. Appointments
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 9. Notifications
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAuthenticated();
+    }
+
+    // 10. Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
