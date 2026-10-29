@@ -31,7 +31,7 @@ When creating the backend service in the [Render Dashboard](https://dashboard.re
 | **Build Command** | `pip install -r requirements.txt` | Installs FastAPI, Uvicorn, SQLAlchemy, Psycopg2, etc. |
 | **Start Command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` | Starts the production ASGI server bound to Render's assigned port |
 | **Auto-Deploy** | `Yes` (Recommended) | Automatically deploys when you push to the Git branch |
-| **Health Check Path** | `/api/health` | Render pings this endpoint to confirm deployment health before routing traffic |
+| **Health Check Path** | `/api/health` (or leave **blank** for instant TCP check) | Leaving blank uses Render's instant TCP port probe (recommended for fastest deploy); setting `/api/health` pings the dedicated ASGI health check |
 
 > **Alternative Start Command:** `python run.py` also works because `run.py` dynamically binds to `0.0.0.0`, loads `$PORT` from environment variables, and disables reload when `APP_ENV=production`. However, the direct `uvicorn` command is standard on Render.
 
@@ -211,6 +211,7 @@ Expected response:
 | **Error: `NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres`** | Database URL begins with `postgres://` | The backend already converts `postgres://` to `postgresql://` automatically in `app/config.py` and `app/database/session.py`. Ensure your `DATABASE_URL` is properly set. |
 | **Browser CORS Error: `No 'Access-Control-Allow-Origin' header`** | Vercel domain not in `ALLOWED_ORIGINS` | In Render Environment Variables, add your exact Vercel frontend URL to `ALLOWED_ORIGINS` (e.g. `https://carenest-ai.vercel.app`). Do not use trailing slashes. Redeploy Render service. |
 | **API requests return 404 on Vercel frontend** | Frontend sending requests to Vercel origin instead of Render | Ensure `NEXT_PUBLIC_API_URL` is set to `https://[RENDER-URL].onrender.com/api` in Vercel settings and **redeploy** your Vercel project. |
+| **Health check fails with 404 on Render (`/api/health 404`)** | Stale build cache or trailing probe mismatch | **1.** Go to **Manual Deploy** -> **Clear build cache & deploy** to purge cached bytecode.<br>**2.** Or go to **Settings** -> **Health Check Path** and leave it **blank** so Render uses an instant TCP port check on port 10000. |
 | **Free tier cold start delay (50+ seconds)** | Render Free Web Service spins down after 15 min of inactivity | When a request arrives, Render spins the container up (takes ~30-50s). Once awake, subsequent requests respond in milliseconds. For 24/7 instant response, upgrade the Web Service to Render Starter ($7/mo). |
 | **Database records disappear after redeploy** | Using SQLite on ephemeral disk without Persistent Disk | Use a cloud PostgreSQL database (Supabase or Render PostgreSQL) by setting `DATABASE_URL="postgresql://..."`, or attach a Render Persistent Disk. |
 
