@@ -48,6 +48,15 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Dedicated Health Check Endpoints for Deployment & Monitoring Probes
+    # Responds immediately to /api/health and /health without prefix or database dependencies
+    @application.get("/api/health", tags=["Health"], summary="Render deployment health check")
+    @application.get("/api/health/", tags=["Health"], include_in_schema=False)
+    @application.get("/health", tags=["Health"], summary="Root health check")
+    @application.get("/health/", tags=["Health"], include_in_schema=False)
+    async def health_check():
+        return {"status": "ok"}
+
     # Include API Routes
     application.include_router(api_router, prefix=settings.API_PREFIX)
 

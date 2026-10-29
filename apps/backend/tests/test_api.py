@@ -12,6 +12,18 @@ def test_health_endpoint():
     assert data["status"] in ("healthy", "ok")
 
 
+def test_health_endpoint_variations():
+    # Verify that Render health check paths (/api/health, /health, with and without trailing slash) return 200
+    for path in ["/api/health", "/api/health/", "/health", "/health/"]:
+        res = client.get(path)
+        assert res.status_code == 200
+        assert res.json() == {"status": "ok"}
+
+    # Verify that prefix is not duplicated (/api/api/health should not exist)
+    res_double = client.get("/api/api/health")
+    assert res_double.status_code == 404
+
+
 def test_auth_login_valid_patient():
     response = client.post("/api/auth/login", json={
         "email": "patient@carenest.ai",
