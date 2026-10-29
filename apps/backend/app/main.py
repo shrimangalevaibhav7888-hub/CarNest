@@ -60,10 +60,11 @@ def create_application() -> FastAPI:
         lifespan=lifespan
     )
 
-    # Configure CORS Middleware
+    # Configure CORS Middleware with dynamic regex support for Vercel frontend deployments
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.ALLOWED_ORIGINS,
+        allow_origin_regex=r"^https://.*\.vercel\.app$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

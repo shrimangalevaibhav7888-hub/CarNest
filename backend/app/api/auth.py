@@ -106,74 +106,93 @@ def register(req: RegisterRequest, response: Response, db: Session = Depends(get
         phone=req.phone.strip() if req.phone else None,
         is_active=True
     )
-    db.add(new_user)
-    db.flush()
 
-    # 5. Automatically create associated profile & records based on role
-    if effective_role in (UserRole.ELDERLY, UserRole.PATIENT):
-        p_profile = PatientProfile(
-            user_id=new_user.id,
-            age=req.age or 72,
-            gender=req.gender or "Not Specified",
-            address=req.address or "Home Address",
-            medical_history=req.medical_notes or "None noted",
-            care_requirements=req.care_requirements or ["Daily vitals check", "Medication reminders"]
-        )
-        db.add(p_profile)
+    try:
+        db.add(new_user)
         db.flush()
 
-        # Add emergency contact if provided
-        if req.emergency_contact_name and req.emergency_contact_phone:
-            e_contact = EmergencyContact(
-                patient_id=p_profile.id,
-                name=req.emergency_contact_name.strip(),
-                relationship=req.emergency_contact_relation or "Family",
-                phone_number=req.emergency_contact_phone.strip(),
-                is_primary=True,
-                priority_order=1
+        # 5. Automatically create associated profile & records based on role
+        if effective_role in (UserRole.ELDERLY, UserRole.PATIENT):
+            p_profile = PatientProfile(
+                user_id=new_user.id,
+                age=req.age or 72,
+                gender=req.gender or "Not Specified",
+                address=req.address or "Home Address",
+                medical_history=req.medical_notes or "None noted",
+                care_requirements=req.care_requirements or ["Daily vitals check", "Medication reminders"]
             )
-            db.add(e_contact)
+            db.add(p_profile)
+            db.flush()
 
-    elif effective_role == UserRole.CAREGIVER:
-        # Caregivers MUST start in PENDING verification status!
-        c_profile = CaregiverProfile(
-            user_id=new_user.id,
-            skills=req.skills or ["General Nursing", "Medication Support", "Vital Signs"],
-            experience_years=req.experience_years or 2,
-            languages=["English"],
-            verification_status=VerificationStatus.PENDING,
-            verification_notes="Awaiting document verification by CareNest Operations.",
-            current_workload=0,
-            bio=f"Caregiver applicant: {req.full_name}. Credentials submitted for verification.",
-            phone=req.phone
-        )
-        db.add(c_profile)
-        db.flush()
-
-    elif effective_role == UserRole.FAMILY:
-        # If an elderly patient's email is provided, link them
-        if req.linked_elderly_email:
-            linked_user = db.query(User).filter(
-                func.lower(User.email) == req.linked_elderly_email.lower().strip()
-            ).first()
-            if linked_user and linked_user.patient_profile:
-                rel = FamilyRelationship.OTHER
-                if req.relationship:
-                    rel_upper = req.relationship.upper()
-                    if hasattr(FamilyRelationship, rel_upper):
-                        rel = getattr(FamilyRelationship, rel_upper)
-
-                f_member = FamilyMember(
-                    user_id=new_user.id,
-                    patient_id=linked_user.patient_profile.id,
-                    relationship_type=rel,
-                    access_level="FULL",
-                    is_primary_contact=True
+            # Add emergency contact if provided
+            if req.emergency_contact_name and req.emergency_contact_phone:
+                e_contact = EmergencyContact(
+                    patient_id=p_profile.id,
+                    name=req.emergency_contact_name.strip(),
+                    relationship=req.emergency_contact_relation or "Family",
+                    phone_number=req.emergency_contact_phone.strip(),
+                    is_primary=True,
+                    priority_order=1
                 )
-                db.add(f_member)
+                db.add(e_contact)
 
-    db.commit()
-    db.refresh(new_user)
+        elif effective_role == UserRole.CAREGIVER:
+            # Caregivers MUST start in PENDING verification status!
+            c_profile = CaregiverProfile(
+                user_id=new_user.id,
+                skills=req.skills or ["General Nursing", "Medication Support", "Vital Signs"],
+                experience_years=req.experience_years or 2,
+                languages=["English"],
+                verification_status=VerificationStatus.PENDING,
+                verification_notes="Awaiting document verification by CareNest Operations.",
+                current_workload=0,
+                bio=f"Caregiver applicant: {req.full_name}. Credentials submitted for verification.",
+                phone=req.phone
+            )
+            db.add(c_profile)
+            db.flush()
+
+        elif effective_role == UserRole.FAMILY:
+            # If an elderly patient's email is provided, link them
+            if req.linked_elderly_email:
+                linked_user = db.query(User).filter(
+                    func.lower(User.email) == req.linked_elderly_email.lower().strip()
+                ).first()
+                if linked_user and linked_user.patient_profile:
+                    rel = FamilyRelationship.OTHER
+                    if req.relationship:
+                        rel_upper = req.relationship.upper()
+                        if hasattr(FamilyRelationship, rel_upper):
+                            rel = getattr(FamilyRelationship, rel_upper)
+
+                    f_member = FamilyMember(
+                        user_id=new_user.id,
+                        patient_id=linked_user.patient_profile.id,
+                        relationship_type=rel,
+                        access_level="FULL",
+                        is_primary_contact=True
+                    )
+                    db.add(f_member)
+
+        db.commit()
+        db.refresh(new_user)
+        logger.info(f"Registered new user successfully: {clean_email} ({effective_role.value})")
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Registration database error for {clean_email}: {e}", exc_info=True)
+        err_text = str(e).lower()
+        if "unique" in err_text or "duplicate" in err_text or "already exists" in err_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this email address already exists. Please sign in instead."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Registration could not be completed. {str(e)}"
+        )
 
     # 6. Generate JWT token
     token = create_access_token(subject=new_user.id, role=new_user.role.value)
@@ -195,13 +214,22 @@ def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
     clean_email = req.email.lower().strip()
     user = db.query(User).filter(func.lower(User.email) == clean_email).first()
 
-    if not user or not verify_password(req.password, user.hashed_password):
+    if not user:
+        logger.warning(f"Login failed: Account '{clean_email}' not found in database.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password. Please verify your credentials."
+        )
+
+    if not verify_password(req.password, user.hashed_password):
+        logger.warning(f"Login failed: Incorrect password provided for account '{clean_email}'.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password. Please verify your credentials."
         )
 
     if not user.is_active:
+        logger.warning(f"Login rejected: Account '{clean_email}' is marked deactivated.")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is deactivated. Please contact CareNest support."
@@ -209,6 +237,7 @@ def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
 
     token = create_access_token(subject=user.id, role=user.role.value)
     _set_auth_cookie(response, token, remember_me=req.remember_me or False)
+    logger.info(f"User authenticated successfully: {clean_email} ({user.role.value})")
 
     summary = _build_user_summary(user)
 

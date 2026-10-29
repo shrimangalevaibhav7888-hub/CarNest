@@ -12,28 +12,28 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 2. Create Custom ENUM Types
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-        CREATE TYPE user_role AS ENUM ('PATIENT', 'ELDERLY', 'FAMILY', 'CAREGIVER', 'HOSPITAL', 'ADMIN');
+        CREATE TYPE user_role AS ENUM ('PATIENT', 'ELDERLY', 'FAMILY', 'FAMILY_MEMBER', 'CAREGIVER', 'HOSPITAL', 'ADMIN');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'mobility_status') THEN
-        CREATE TYPE mobility_status AS ENUM ('INDEPENDENT', 'ASSISTED', 'WHEELCHAIR_BOUND', 'BED_BOUND');
+        CREATE TYPE mobility_status AS ENUM ('INDEPENDENT', 'ASSISTED', 'WHEELCHAIR', 'BEDBOUND', 'WHEELCHAIR_BOUND', 'BED_BOUND');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'living_situation') THEN
-        CREATE TYPE living_situation AS ENUM ('LIVES_ALONE', 'LIVES_WITH_SPOUSE', 'LIVES_WITH_FAMILY', 'ASSISTED_FACILITY');
+        CREATE TYPE living_situation AS ENUM ('LIVES_ALONE', 'WITH_SPOUSE', 'WITH_FAMILY', 'ASSISTED_FACILITY', 'LIVES_WITH_SPOUSE', 'LIVES_WITH_FAMILY');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'discharge_status') THEN
-        CREATE TYPE discharge_status AS ENUM ('IN_HOSPITAL', 'READY_FOR_DISCHARGE', 'DISCHARGED', 'READMITTED');
+        CREATE TYPE discharge_status AS ENUM ('HOSPITALIZED', 'DISCHARGE_READY', 'DISCHARGED_HOME', 'READMITTED', 'IN_HOSPITAL', 'READY_FOR_DISCHARGE', 'DISCHARGED');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'care_plan_status') THEN
-        CREATE TYPE care_plan_status AS ENUM ('ACTIVE', 'COMPLETED', 'PAUSED', 'TERMINATED');
+        CREATE TYPE care_plan_status AS ENUM ('DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'TERMINATED');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_category') THEN
-        CREATE TYPE task_category AS ENUM ('MEDICATION', 'MEALS', 'HYDRATION', 'HYGIENE', 'PHYSIOTHERAPY', 'WALKING', 'EXERCISE', 'VITAL_CHECK', 'DOCTOR_APPOINTMENT', 'COMPANION_VISIT');
+        CREATE TYPE task_category AS ENUM ('MEDICATION', 'MEALS', 'HYDRATION', 'HYGIENE', 'WALKING', 'EXERCISE', 'DOCTOR_APPOINTMENT', 'PHYSIOTHERAPY', 'VITAL_CHECK', 'COMPANION_VISIT', 'OTHER');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_priority') THEN
-        CREATE TYPE task_priority AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+        CREATE TYPE task_priority AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_status') THEN
-        CREATE TYPE task_status AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'MISSED', 'SKIPPED');
+        CREATE TYPE task_status AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'MISSED', 'CANCELLED', 'SKIPPED');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'medication_status') THEN
         CREATE TYPE medication_status AS ENUM ('PENDING', 'TAKEN', 'MISSED', 'SKIPPED', 'SNOOZED');
@@ -42,25 +42,25 @@ DO $$ BEGIN
         CREATE TYPE appointment_status AS ENUM ('SCHEDULED', 'COMPLETED', 'CANCELLED', 'RESCHEDULED');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'emergency_status') THEN
-        CREATE TYPE emergency_status AS ENUM ('TRIGGERED', 'ACKNOWLEDGED', 'PARAMEDIC_DISPATCHED', 'RESOLVED', 'FALSE_ALARM');
+        CREATE TYPE emergency_status AS ENUM ('TRIGGERED', 'ACKNOWLEDGED', 'RESPONDING', 'RESOLVED', 'PARAMEDIC_DISPATCHED', 'FALSE_ALARM');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'emergency_severity') THEN
-        CREATE TYPE emergency_severity AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+        CREATE TYPE emergency_severity AS ENUM ('MODERATE', 'HIGH', 'CRITICAL', 'LOW', 'MEDIUM');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'caregiver_availability') THEN
-        CREATE TYPE caregiver_availability AS ENUM ('AVAILABLE', 'ON_VISIT', 'OFF_DUTY', 'VACATION');
+        CREATE TYPE caregiver_availability AS ENUM ('AVAILABLE', 'BUSY', 'ON_LEAVE', 'ON_VISIT', 'OFF_DUTY', 'VACATION');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'verification_status') THEN
-        CREATE TYPE verification_status AS ENUM ('PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED');
+        CREATE TYPE verification_status AS ENUM ('VERIFIED', 'PENDING', 'UNDER_REVIEW', 'REJECTED', 'SUSPENDED');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
-        CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER', 'APPOINTMENT_REMINDER', 'DAILY_CARE_UPDATE', 'EMERGENCY_ALERT', 'CAREGIVER_ASSIGNMENT', 'SUBSCRIPTION_UPDATE', 'SYSTEM');
+        CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER', 'TASK_REMINDER', 'MISSED_TASK', 'APPOINTMENT_REMINDER', 'CAREGIVER_ASSIGNMENT', 'EMERGENCY_ALERT', 'CARE_PLAN_UPDATE', 'FAMILY_UPDATE', 'SYSTEM', 'DAILY_CARE_UPDATE', 'SUBSCRIPTION_UPDATE');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vital_flag_status') THEN
-        CREATE TYPE vital_flag_status AS ENUM ('NORMAL', 'WARNING', 'CRITICAL', 'PENDING_REVIEW');
+        CREATE TYPE vital_flag_status AS ENUM ('NORMAL', 'ATTENTION_REQUIRED', 'ELEVATED', 'WARNING', 'CRITICAL', 'PENDING_REVIEW');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'family_relationship') THEN
-        CREATE TYPE family_relationship AS ENUM ('SON', 'DAUGHTER', 'SPOUSE', 'SIBLING', 'GRANDCHILD', 'GUARDIAN', 'OTHER');
+        CREATE TYPE family_relationship AS ENUM ('SON', 'DAUGHTER', 'SPOUSE', 'SIBLING', 'GUARDIAN', 'GRANDCHILD', 'OTHER');
     END IF;
 END $$;
 
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS patient_profiles (
     care_requirements JSONB DEFAULT '[]'::jsonb,
     allergies JSONB DEFAULT '[]'::jsonb,
     medical_history TEXT,
-    discharge_status discharge_status NOT NULL DEFAULT 'READY_FOR_DISCHARGE',
+    discharge_status discharge_status NOT NULL DEFAULT 'DISCHARGE_READY',
     emergency_notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -476,22 +476,29 @@ $$ LANGUAGE SQL STABLE;
 
 -- Users Table Policies
 CREATE POLICY "users_read_own" ON users
-    FOR SELECT USING (id = auth_user_id() OR (SELECT role FROM users WHERE id = auth_user_id()) = 'ADMIN');
+    FOR SELECT USING (auth_user_id() IS NULL OR id = auth_user_id() OR (SELECT role FROM users WHERE id = auth_user_id()) = 'ADMIN');
+
+CREATE POLICY "users_insert_public" ON users
+    FOR INSERT WITH CHECK (true);
 
 CREATE POLICY "users_update_own" ON users
-    FOR UPDATE USING (id = auth_user_id());
+    FOR UPDATE USING (id = auth_user_id() OR (SELECT role FROM users WHERE id = auth_user_id()) = 'ADMIN');
 
 -- Patient Profiles Policies
 CREATE POLICY "patients_read_authorized" ON patient_profiles
     FOR SELECT USING (
-        user_id = auth_user_id()
+        auth_user_id() IS NULL
+        OR user_id = auth_user_id()
         OR id IN (SELECT patient_id FROM family_members WHERE user_id = auth_user_id())
         OR id IN (SELECT patient_id FROM caregiver_assignments WHERE caregiver_id IN (SELECT id FROM caregiver_profiles WHERE user_id = auth_user_id()) AND status = 'ACTIVE')
         OR (SELECT role FROM users WHERE id = auth_user_id()) = 'ADMIN'
     );
 
+CREATE POLICY "patients_insert_public" ON patient_profiles
+    FOR INSERT WITH CHECK (true);
+
 CREATE POLICY "patients_update_own" ON patient_profiles
-    FOR UPDATE USING (user_id = auth_user_id() OR (SELECT role FROM users WHERE id = auth_user_id()) = 'ADMIN');
+    FOR UPDATE USING (auth_user_id() IS NULL OR user_id = auth_user_id() OR (SELECT role FROM users WHERE id = auth_user_id()) = 'ADMIN');
 
 -- Medications Policies
 CREATE POLICY "medications_read_authorized" ON medications

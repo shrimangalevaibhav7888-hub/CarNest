@@ -13,7 +13,7 @@ from app.models.enums import (
     EmergencySeverity, CaregiverAvailability, VerificationStatus,
     NotificationType, VitalFlagStatus, FamilyRelationship
 )
-from app.auth.security import get_password_hash
+from app.auth.security import get_password_hash, verify_password
 from app.utils.logger import logger
 
 
@@ -23,15 +23,37 @@ def seed_database():
     db = SessionLocal()
 
     try:
-        # Check if already seeded
-        existing_user = db.query(User).filter(User.email == "patient@carenest.ai").first()
-        if existing_user:
-            logger.info("Database already seeded with demo records. Skipping seed.")
+        default_hashed_pwd = get_password_hash("Password123!")
+
+        core_demo_emails = [
+            "patient@carenest.ai",
+            "admin@carenest.ai",
+            "caregiver@carenest.ai",
+            "family@carenest.ai",
+            "hospital@carenest.ai"
+        ]
+
+        existing_users = {
+            u.email.lower(): u
+            for u in db.query(User).filter(User.email.in_(core_demo_emails)).all()
+        }
+
+        # If all core demo users already exist, ensure active status and valid passwords
+        if len(existing_users) == len(core_demo_emails):
+            updated = False
+            for email, u in existing_users.items():
+                if not verify_password("Password123!", u.hashed_password):
+                    u.hashed_password = default_hashed_pwd
+                    updated = True
+                if not u.is_active:
+                    u.is_active = True
+                    updated = True
+            if updated:
+                db.commit()
+            logger.info("All CareNest demo accounts verified and ready.")
             return
 
         logger.info("Seeding CareNest AI database with complete medical & care ecosystem data...")
-
-        default_hashed_pwd = get_password_hash("Password123!")
 
         # 1. Create Hospital
         hospital = Hospital(

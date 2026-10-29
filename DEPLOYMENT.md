@@ -71,7 +71,7 @@ In the Render Dashboard, navigate to your Web Service -> **Environment** tab, an
 
 | Variable Name | Required | Example Production Value | Purpose |
 | :--- | :--- | :--- | :--- |
-| `ALLOWED_ORIGINS` | **Yes** | `https://your-carenest-app.vercel.app,http://localhost:3000` | Comma-separated or JSON list of allowed origins. **Do not put trailing slashes**. The backend automatically strips trailing slashes defensively. |
+| `ALLOWED_ORIGINS` | No | `https://your-carenest-app.vercel.app,http://localhost:3000` | Optional custom origins. Note: The backend automatically matches all `https://*.vercel.app` domains securely via dynamic regex CORS matching. |
 
 ### Optional Service Variables
 

@@ -233,3 +233,104 @@ def test_auth_me_endpoint():
     assert data["full_name"] == "Priya Sharma"
     assert data["email"] == "priya.sharma@carenest.ai"
     assert data["role"] in ("ELDERLY", "PATIENT")
+
+
+def test_registration_fresh_unique_account():
+    """Verify fresh registration creates a new user, hashed password, and returns JWT token."""
+    import uuid
+    unique_email = f"patient_{uuid.uuid4().hex[:8]}@example.com"
+    res = client.post("/api/auth/register", json={
+        "email": unique_email,
+        "password": "ValidPassword123!",
+        "confirm_password": "ValidPassword123!",
+        "full_name": "Unique Test Patient",
+        "role": "ELDERLY",
+        "phone": "+1 555-0199",
+        "age": 75,
+        "gender": "Female",
+        "address": "123 Sunshine Ave",
+        "emergency_contact_name": "Contact Person",
+        "emergency_contact_phone": "+1 555-0188"
+    })
+    assert res.status_code == 201
+    data = res.json()
+    assert "access_token" in data
+    assert data["user"]["email"] == unique_email
+    assert data["user"]["full_name"] == "Unique Test Patient"
+    assert data["user"]["patient_id"] is not None
+
+    # Verify newly registered user can immediately log in
+    login_res = client.post("/api/auth/login", json={
+        "email": unique_email,
+        "password": "ValidPassword123!"
+    })
+    assert login_res.status_code == 200
+    assert login_res.json()["user"]["email"] == unique_email
+
+
+def test_registration_duplicate_email_enforcement():
+    """Verify registration with already existing email returns HTTP 400."""
+    res = client.post("/api/auth/register", json={
+        "email": "patient@carenest.ai",
+        "password": "Password123!",
+        "confirm_password": "Password123!",
+        "full_name": "Eleanor Duplicate",
+        "role": "ELDERLY"
+    })
+    assert res.status_code == 400
+    assert "already exists" in res.json()["detail"].lower()
+
+
+def test_valid_login_demo_credentials():
+    """Verify all core demo accounts can log in with Password123! and receive valid tokens."""
+    demo_accounts = [
+        ("patient@carenest.ai", "Password123!", "Eleanor Vance"),
+        ("family@carenest.ai", "Password123!", "Sarah Vance"),
+        ("caregiver@carenest.ai", "Password123!", "David Miller, RN"),
+        ("admin@carenest.ai", "Password123!", "Alex Mercer (Admin)")
+    ]
+    for email, pwd, expected_name in demo_accounts:
+        res = client.post("/api/auth/login", json={
+            "email": email,
+            "password": pwd
+        })
+        assert res.status_code == 200, f"Failed login for {email}: {res.text}"
+        data = res.json()
+        assert "access_token" in data
+        assert data["user"]["full_name"] == expected_name
+        assert data["user"]["is_active"] is True
+
+
+def test_invalid_login_wrong_password():
+    """Verify login with invalid password returns 401 with standard error message."""
+    res = client.post("/api/auth/login", json={
+        "email": "patient@carenest.ai",
+        "password": "CompletelyWrongPassword!"
+    })
+    assert res.status_code == 401
+    assert "invalid email or password" in res.json()["detail"].lower()
+
+
+def test_invalid_login_missing_database_record():
+    """Verify login with email not present in database returns 401."""
+    import uuid
+    ghost_email = f"ghost_{uuid.uuid4().hex[:10]}@nonexistent.domain"
+    res = client.post("/api/auth/login", json={
+        "email": ghost_email,
+        "password": "Password123!"
+    })
+    assert res.status_code == 401
+    assert "invalid email or password" in res.json()["detail"].lower()
+
+
+def test_cors_preflight_for_vercel_deployment():
+    """Verify CORS preflight OPTIONS request from a Vercel deployment origin is permitted."""
+    res = client.options("/api/auth/login", headers={
+        "Origin": "https://carenest-ai-test.vercel.app",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type"
+    })
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == "https://carenest-ai-test.vercel.app"
+    assert res.headers.get("access-control-allow-credentials") == "true"
+
