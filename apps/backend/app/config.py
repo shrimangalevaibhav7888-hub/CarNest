@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     
     # Database Configuration (SQLite local or Supabase PostgreSQL cloud)
     DATABASE_URL: str = "sqlite:///./carenest.db"
+    AUTO_SEED: bool = True
     
     # Supabase Cloud Configuration
     SUPABASE_URL: Optional[str] = None
@@ -37,17 +38,33 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def sanitize_database_url(cls, v: Optional[str]) -> str:
+        if isinstance(v, str) and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql://", 1)
+        return v or "sqlite:///./carenest.db"
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, str) and v.startswith("["):
-            try:
-                return json.loads(v)
-            except Exception:
-                return ["http://localhost:3000", "http://127.0.0.1:3000"]
-        return v
+        origins: List[str] = []
+        if isinstance(v, str):
+            v_stripped = v.strip()
+            if v_stripped.startswith("["):
+                try:
+                    origins = json.loads(v_stripped)
+                except Exception:
+                    origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+            else:
+                origins = [i.strip() for i in v_stripped.split(",") if i.strip()]
+        elif isinstance(v, list):
+            origins = v
+        else:
+            return ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+        cleaned = [o.strip().rstrip("/") for o in origins if isinstance(o, str) and o.strip()]
+        return cleaned or ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     model_config = SettingsConfigDict(
         env_file=".env",

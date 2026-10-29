@@ -17,7 +17,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"API Prefix: {settings.API_PREFIX}")
     try:
         init_db()
-        seed_database()
+        if settings.AUTO_SEED:
+            seed_database()
     except Exception as e:
         logger.error(f"Startup DB initialization error: {e}")
     
@@ -64,3 +65,4 @@ def create_application() -> FastAPI:
 
 
 app = create_application()
+application = app  # Alias for ASGI servers referencing 'application'
