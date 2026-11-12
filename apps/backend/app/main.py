@@ -82,8 +82,11 @@ def create_application() -> FastAPI:
     async def render_health_probe():
         return {"status": "ok"}
 
-    # Include API Routes
+    # Include API Routes both with and without API_PREFIX (/api)
+    # This guarantees zero-config resilience whether frontend or external clients call
+    # /api/auth/login or /auth/login, /api/patients or /patients, etc.
     application.include_router(api_router, prefix=settings.API_PREFIX)
+    application.include_router(api_router)
 
     @application.get("/", tags=["Root"])
     async def root():

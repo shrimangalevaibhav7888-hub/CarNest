@@ -334,3 +334,56 @@ def test_cors_preflight_for_vercel_deployment():
     assert res.headers.get("access-control-allow-origin") == "https://carenest-ai-test.vercel.app"
     assert res.headers.get("access-control-allow-credentials") == "true"
 
+
+def test_auth_routes_accessible_with_and_without_api_prefix():
+    """
+    Verify auth endpoints respond identically whether called with /api prefix
+    or at root (/auth/login and /api/auth/login), eliminating 404 errors regardless
+    of frontend URL configuration.
+    """
+    # 1. /auth/login with valid demo credentials -> 200 (never 404)
+    res_direct = client.post("/auth/login", json={
+        "email": "patient@carenest.ai",
+        "password": "Password123!"
+    })
+    assert res_direct.status_code == 200, f"Expected 200 on /auth/login, got {res_direct.status_code}"
+    token = res_direct.json()["access_token"]
+
+    # 2. /api/auth/login with valid demo credentials -> 200
+    res_api = client.post("/api/auth/login", json={
+        "email": "patient@carenest.ai",
+        "password": "Password123!"
+    })
+    assert res_api.status_code == 200
+
+    # 3. Invalid credentials on /auth/login return 401, NEVER 404
+    bad_login_direct = client.post("/auth/login", json={
+        "email": "patient@carenest.ai",
+        "password": "WrongPassword!"
+    })
+    assert bad_login_direct.status_code == 401, f"Expected 401 on /auth/login, got {bad_login_direct.status_code}"
+
+    # 4. Invalid credentials on /api/auth/login return 401, NEVER 404
+    bad_login_api = client.post("/api/auth/login", json={
+        "email": "patient@carenest.ai",
+        "password": "WrongPassword!"
+    })
+    assert bad_login_api.status_code == 401, f"Expected 401 on /api/auth/login, got {bad_login_api.status_code}"
+
+    # 5. Non-existent account on /auth/login returns 401, NEVER 404
+    ghost_login_direct = client.post("/auth/login", json={
+        "email": "does.not.exist@carenest.ai",
+        "password": "Password123!"
+    })
+    assert ghost_login_direct.status_code == 401
+
+    # 6. /auth/me returns 200 with Bearer token
+    me_direct = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_direct.status_code == 200
+    assert me_direct.json()["email"] == "patient@carenest.ai"
+
+    # 7. /api/auth/me returns 200 with Bearer token
+    me_api = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_api.status_code == 200
+    assert me_api.json()["email"] == "patient@carenest.ai"
+
